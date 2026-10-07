@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Junction Pattern Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#d3dadf; --panel:#f4f6f7; --ink:#15212b; --muted:#5d6b76; --line:#b9c3ca;
+  --s0:#1f8a4c; --s1:#c98a0b; --s2:#d2492f; --s3:#7d1634;
+  --head:"Barlow Condensed","Arial Narrow",sans-serif; --body:"Barlow",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--body);padding:24px;max-width:1180px;margin:auto}
+h1{font:700 34px/1 var(--head);letter-spacing:.01em}
+h2{font:600 22px/1.1 var(--head);margin-bottom:12px}
+header{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+header p{color:var(--muted)}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px}
+.field{margin-bottom:16px}
+.field label{display:flex;justify-content:space-between;font-weight:600;margin-bottom:4px}
+.field output{font:600 20px/1 var(--head)}
+input[type=range]{width:100%;accent-color:var(--ink)}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+button{font:600 15px var(--body);border:1px solid var(--ink);background:transparent;color:var(--ink);padding:8px 12px;border-radius:4px;cursor:pointer}
+button:hover{background:#e3e8eb}
+button.primary{background:var(--ink);color:#fff;width:100%;padding:12px;font-size:17px}
+button.primary:hover{background:#2b3b48}
+button.on{background:var(--s0);border-color:var(--s0);color:#fff}
+button:focus-visible,input:focus-visible{outline:3px solid #2d6cdf;outline-offset:2px}
+.sign{border-radius:8px;padding:6px;background:#fff;margin-bottom:16px}
+.sign-in{border:3px solid #fff;border-radius:5px;color:#fff;padding:22px 26px;background:var(--s0);transition:background .35s}
+.sign-in .pattern{font:700 clamp(40px,7vw,68px)/.95 var(--head)}
+.sign-in .meta{display:flex;gap:28px;margin-top:14px;font-weight:500;flex-wrap:wrap}
+.sign-in .meta b{font:700 26px/1 var(--head);display:block}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+ul{padding-left:18px}li{margin-bottom:4px}
+.rec{border-left:5px solid var(--ink);padding-left:14px;font-size:18px}
+.row2{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;margin-top:20px}
+canvas{width:100%;display:block}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:right;padding:7px 6px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--muted)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px}
+.hist{display:flex;gap:3px;align-items:end;height:70px;margin-top:6px}
+.hist i{flex:1;border-radius:2px 2px 0 0;min-width:4px;transition:height .3s}
+.note{color:var(--muted);font-size:14px;margin-top:8px}
+#err{color:var(--s2);font-weight:600;margin-top:10px;min-height:1.4em}
+@media(max-width:860px){.grid,.row2,.cols{grid-template-columns:1fr}body{padding:14px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Junction Pattern Monitor</h1><p>K-Means traffic clustering with plain-language recommendations.</p></div>
+  <button id="live" aria-pressed="false">Start live simulation</button>
+</header>
+
+<div class="grid">
+  <section class="panel" aria-label="Traffic readings">
+    <h2>Current readings</h2>
+    <div class="presets" id="presets"></div>
+    <div class="field"><label for="vc">Vehicles <output id="vcO"></output></label><input id="vc" type="range" min="1" max="300" value="150"></div>
+    <div class="field"><label for="sp">Average speed (km/h) <output id="spO"></output></label><input id="sp" type="range" min="3" max="80" value="22"></div>
+    <div class="field"><label for="oc">Occupancy (%) <output id="ocO"></output></label><input id="oc" type="range" min="1" max="99" value="72"></div>
+    <div class="field"><label for="wt">Waiting time (sec) <output id="wtO"></output></label><input id="wt" type="range" min="1" max="150" value="55"></div>
+    <button class="primary" id="go">Analyze traffic</button>
+    <div id="err" role="alert"></div>
+  </section>
+
+  <section aria-live="polite">
+    <div class="sign"><div class="sign-in" id="sign">
+      <div class="pattern" id="pattern">Analyzing…</div>
+      <div class="meta">
+        <div><b id="match">–</b>cluster match</div>
+        <div><b id="dv">–</b>vehicles vs normal</div>
+        <div><b id="ds">–</b>speed vs normal</div>
+        <div><b id="cl">–</b>K-Means cluster</div>
+      </div>
+    </div></div>
+    <div class="panel cols">
+      <div><h2>Why this pattern</h2><ul id="reasons"></ul></div>
+      <div><h2>Recommended action</h2><p class="rec" id="rec"></p></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Last 40 readings</h2>
+      <div class="hist" id="hist"></div>
+      <p class="note">Bar height and color show the congestion level of each analysis.</p>
+    </div>
+  </section>
+</div>
+
+<div class="row2">
+  <section class="panel"><h2>Where this reading sits among the clusters</h2>
+    <canvas id="cv" width="680" height="380" aria-label="Cluster scatter plot"></canvas>
+    <p class="note">Training data projected to 2D with PCA. The ringed point is the current reading.</p></section>
+  <section class="panel"><h2>Cluster profiles</h2>
+    <table id="prof"><thead><tr><th>Pattern</th><th>Veh</th><th>km/h</th><th>Occ %</th><th>Wait s</th></tr></thead><tbody></tbody></table>
+    <p class="note">Average values at each cluster center.</p></section>
+</div>
+
+<script>
+const COL=["#1f8a4c","#c98a0b","#d2492f","#7d1634"];
+const $=id=>document.getElementById(id);
+const ids=["vc","sp","oc","wt"];
+const PRESETS={"Free flow":[30,55,20,8],"Normal":[80,42,40,20],"Heavy":[145,25,68,48],"Severe":[210,12,88,82]};
+let pts=[],cur=null,hist=[],timer=null,t=0;
+
+ids.forEach(i=>{const s=$(i),o=$(i+"O");const u=()=>o.textContent=s.value;s.oninput=()=>{u();if(!timer)analyze()};u()});
+Object.entries(PRESETS).forEach(([n,v])=>{const b=document.createElement("button");b.textContent=n;b.onclick=()=>{setVals(v);analyze()};$("presets").append(b)});
+$("go").onclick=analyze;
+
+function setVals(v){ids.forEach((i,k)=>{$(i).value=Math.round(v[k]);$(i+"O").textContent=Math.round(v[k])})}
+
+async function analyze(){
+  $("err").textContent="";
+  try{
+    const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({vehicle_count:+$("vc").value,avg_speed_kmh:+$("sp").value,occupancy:+$("oc").value,avg_wait_time_sec:+$("wt").value})});
+    const d=await r.json();
+    if(!d.success)throw new Error(d.error);
+    render(d);
+  }catch(e){$("err").textContent="Could not analyze: "+e.message}
+}
+
+function render(d){
+  $("sign").style.background=COL[d.level];
+  $("pattern").textContent=d.pattern;
+  $("match").textContent=d.match.toFixed(0)+"%";
+  const sg=n=>(n>0?"+":"")+n+"%";
+  $("dv").textContent=sg(d.vs_normal.vehicle_count);$("ds").textContent=sg(d.vs_normal.avg_speed_kmh);
+  $("cl").textContent="#"+d.cluster;
+  $("reasons").innerHTML=d.reasons.map(r=>`<li>${r}</li>`).join("");
+  $("rec").textContent=d.recommendation;
+  cur=d.point;hist.push(d.level);hist=hist.slice(-40);
+  $("hist").innerHTML=hist.map(l=>`<i style="height:${(l+1)*25}%;background:${COL[l]}"></i>`).join("");
+  draw();
+}
+
+function draw(){
+  const c=$("cv"),g=c.getContext("2d"),W=c.width,H=c.height;g.clearRect(0,0,W,H);
+  if(!pts.length)return;
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  if(cur){xs.push(cur.x);ys.push(cur.y)}
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),pad=24;
+  const X=x=>pad+(x-x0)/(x1-x0||1)*(W-2*pad),Y=y=>H-pad-(y-y0)/(y1-y0||1)*(H-2*pad);
+  pts.forEach(p=>{g.fillStyle=COL[p.level]+"aa";g.beginPath();g.arc(X(p.x),Y(p.y),3.5,0,7);g.fill()});
+  if(cur){g.lineWidth=3;g.strokeStyle="#15212b";g.fillStyle="#fff";g.beginPath();g.arc(X(cur.x),Y(cur.y),9,0,7);g.fill();g.stroke()}
+}
+
+async function init(){
+  const d=await (await fetch("/api/clusters")).json();
+  pts=d.points;
+  $("prof").tBodies[0].innerHTML=d.profiles.map((p,i)=>`<tr><td><span class="dot" style="background:${COL[i]}"></span>${p.pattern}</td><td>${p.vehicle_count}</td><td>${p.avg_speed_kmh}</td><td>${p.occupancy}</td><td>${p.avg_wait_time_sec}</td></tr>`).join("");
+  analyze();
+}
+
+// Live simulation: a rush-hour wave of load (0 = empty road, 1 = gridlock) with noise.
+function tick(){
+  t+=0.07;
+  const load=Math.min(1,Math.max(0,.5+.42*Math.sin(t)+.1*Math.sin(t*3.1)+(Math.random()-.5)*.08));
+  const lerp=(a,b)=>a+(b-a)*load, n=s=>1+(Math.random()-.5)*s;
+  setVals([lerp(30,210)*n(.12),lerp(55,12)*n(.1),lerp(20,88)*n(.08),lerp(8,82)*n(.12)]);
+  analyze();
+}
+$("live").onclick=()=>{
+  const b=$("live");
+  if(timer){clearInterval(timer);timer=null;b.textContent="Start live simulation";b.classList.remove("on");b.setAttribute("aria-pressed","false")}
+  else{timer=setInterval(tick,1200);tick();b.textContent="Stop live simulation";b.classList.add("on");b.setAttribute("aria-pressed","true")}
+};
+init();
+</script>
+</body>
+</html>
